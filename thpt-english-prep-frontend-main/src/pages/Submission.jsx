@@ -160,6 +160,26 @@ function Submission() {
   // Memoize the questions list
   const allQuestions = useMemo(() => getAllQuestions(), [getAllQuestions])
 
+  // Calculate score based on correct_answer comparison
+  const calculateScore = useMemo(() => {
+    let correct = 0
+    let total = allQuestions.length
+
+    allQuestions.forEach(question => {
+      const userAnswer = answers[question.id]
+      const correctAnswer = question.data.correct_answer
+      if (userAnswer === correctAnswer) {
+        correct++
+      }
+    })
+
+    return {
+      correct,
+      total,
+      percentage: total > 0 ? Math.round((correct / total) * 100) : 0
+    }
+  }, [allQuestions, answers])
+
   const handleSendMessage = useCallback(async () => {
     if (!chatInput.trim() || !activeChatQuestion) return
 
@@ -317,9 +337,9 @@ function Submission() {
   const renderQuestion = useCallback((question, index) => {
     const questionId = question.id
     const userAnswer = answers[questionId]
-    // Giả sử tất cả đều đúng
-    const isCorrect = true
-    const correctAnswer = userAnswer // Since we're assuming all correct
+    const correctAnswer = question.data.correct_answer
+    const isCorrect = userAnswer === correctAnswer
+    const isEmptyAnswer = !userAnswer
 
     return (
       <div key={questionId} id={`question-${question.num}`} className="question-card">
@@ -327,7 +347,7 @@ function Submission() {
           <div className="question-header">
             <span className="question-number">Câu {question.num}</span>
             <span className={`answer-indicator ${isCorrect ? 'correct' : 'incorrect'}`}>
-              {isCorrect ? '✓ Đúng' : '✗ Sai'}
+              {isCorrect ? '✓ Đúng' : isEmptyAnswer ? '○ Chưa trả lời' : '✗ Sai'}
             </span>
           </div>
           <button
@@ -376,15 +396,32 @@ function Submission() {
             const isUserAnswer = userAnswer === optionLetter
             const isCorrectAnswer = correctAnswer === optionLetter
 
+            // Logic: 
+            // - Câu đúng: bôi xanh đáp án user chọn
+            // - Câu sai: bôi đỏ đáp án user chọn + bôi xanh đáp án đúng
+            // - Chưa chọn: bôi xanh đáp án đúng
+            let optionClass = 'option-item'
+            if (isUserAnswer && isCorrect) {
+              optionClass += ' user-answer-correct'
+            } else if (isUserAnswer && !isCorrect) {
+              optionClass += ' user-answer-incorrect'
+            }
+            if ((isEmptyAnswer || !isCorrect) && isCorrectAnswer) {
+              optionClass += ' correct-answer-highlight'
+            }
+
             return (
-              <div
-                key={optIdx}
-                className={`option-item ${isUserAnswer ? 'user-answer' : ''} ${isCorrectAnswer ? 'correct-answer' : ''}`}
-              >
+              <div key={optIdx} className={optionClass}>
                 <span className="option-label">{optionLetter}.</span>
                 <span className="option-text">{option}</span>
                 {isUserAnswer && isCorrect && (
-                  <span className="option-badge correct">Bạn chọn</span>
+                  <span className="option-badge correct">✓ Bạn chọn</span>
+                )}
+                {isUserAnswer && !isCorrect && (
+                  <span className="option-badge incorrect">✗ Bạn chọn sai</span>
+                )}
+                {(isEmptyAnswer || !isCorrect) && isCorrectAnswer && (
+                  <span className="option-badge correct-ans">✓ Đáp án đúng</span>
                 )}
               </div>
             )
@@ -424,8 +461,8 @@ function Submission() {
             <div className="pane-header">
               <h2>Kết quả làm bài</h2>
               <div className="score-summary">
-                <span className="score-text">Điểm: {allQuestions.length}/{allQuestions.length}</span>
-                <span className="score-percent">100%</span>
+                <span className="score-text">Điểm: {calculateScore.correct}/{calculateScore.total}</span>
+                <span className="score-percent">{calculateScore.percentage}%</span>
               </div>
             </div>
 
